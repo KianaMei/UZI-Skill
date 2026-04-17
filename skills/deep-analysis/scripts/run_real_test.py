@@ -84,7 +84,7 @@ def run_fetcher(module_name: str, args: tuple) -> dict:
         return {"data": {}, "source": module_name, "fallback": True, "error": f"{type(e).__name__}: {e}"}
 
 
-def collect_raw_data(ticker: str, max_workers: int = 6, resume: bool = True) -> dict:
+def collect_raw_data(ticker: str, max_workers: int = 10, resume: bool = True) -> dict:
     """Parallel fetcher execution via ThreadPoolExecutor.
 
     Strategy: run fetch_basic first (others depend on industry etc), then
@@ -170,16 +170,17 @@ def collect_raw_data(ticker: str, max_workers: int = 6, resume: bool = True) -> 
             others.append((m, d, a))
     if skipped_cached:
         print(f"  [resume] 跳过 {len(skipped_cached)} 个已缓存维度: {', '.join(skipped_cached[:5])}{'...' if len(skipped_cached) > 5 else ''}")
-    print(f"  [wave 2] {len(others)}/{len(all_others)} fetchers parallel (max_workers={max_workers}, per-fetcher 90s)...")
+    print(f"  [wave 2] {len(others)}/{len(all_others)} fetchers parallel (max_workers={max_workers}, per-fetcher 60s)...")
 
     # 长尾 fetcher 给更长 timeout（拉研报 / 拉公告 通常较慢）
+    # v2.7.3 · 降低 timeout，快速失败让 agent 补数据，避免等满 180s 才超时
     PER_FETCHER_TIMEOUT_OVERRIDES = {
-        "6_research": 180,    # akshare research_report 拉 30+ 篇
-        "1_financials": 150,  # 多张财报合并
-        "10_valuation": 150,  # 历史估值分位计算
-        "15_events": 120,     # 公告 + web search
+        "6_research": 90,    # akshare research_report 拉 30+ 篇
+        "1_financials": 90,  # 多张财报合并
+        "10_valuation": 90,  # 历史估值分位计算（mini_racer 串行，减少等待）
+        "15_events": 70,     # 公告 + web search
     }
-    DEFAULT_PER_FETCHER_TIMEOUT = 90
+    DEFAULT_PER_FETCHER_TIMEOUT = 60
 
     def _run_one(item):
         mod_name, dim_key, args_fn = item
